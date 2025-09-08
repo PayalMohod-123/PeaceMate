@@ -210,7 +210,30 @@ def chat():
 
     return jsonify({"reply": bot_reply})
 
+# ---------------- Admin Route (Check Users) ----------------
+@app.route("/admin/users")
+def admin_users():
+    # Sirf tum login karke dekh sako (ek simple check)
+    admin_secret = os.getenv("ADMIN_SECRET", "admin123")  # .env me rakho
+    if request.args.get("key") != admin_secret:
+        return "❌ Unauthorized access"
+
+    conn = sqlite3.connect("users.db")
+    c = conn.cursor()
+    c.execute("SELECT id, name, email FROM users")
+    users = c.fetchall()
+    conn.close()
+
+    html = "<h2>Total Users: {}</h2>".format(len(users))
+    html += "<ul>"
+    for u in users:
+        html += "<li>{} - {} ({})</li>".format(u[0], u[1], u[2])
+    html += "</ul>"
+    return html
+
+
 
 # ---------------- Run ----------------
 if __name__ == "__main__":
     app.run(debug=True)
+
