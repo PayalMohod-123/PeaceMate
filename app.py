@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-import sqlite3
-import os
-import random
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+import os, random
 from dotenv import load_dotenv
 import google.generativeai as genai
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,14 +10,19 @@ from werkzeug.security import generate_password_hash, check_password_hash
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "fallbacksecret")   # .env me set hoga
+app.secret_key = os.getenv("SECRET_KEY", "fallbacksecret")
+
+# ---------------- MongoDB Setup ----------------
+mongo_uri = os.getenv("MONGO_URI")
+client = MongoClient(mongo_uri)
+db = client["PeaceMateDB"]  # apne project ka DB
+users_collection = db["users"]
 
 # ---------------- Multiple API Keys Setup ----------------
 API_KEYS = os.getenv("GOOGLE_API_KEYS", "").split(",")
 current_index = 0
 
 def get_api_key():
-    """Round-robin se API key return karega"""
     global current_index
     if not API_KEYS or API_KEYS == [""]:
         raise ValueError("❌ No API keys found! Please add GOOGLE_API_KEYS in .env")
@@ -26,27 +31,9 @@ def get_api_key():
     return key
 
 def get_model():
-    """Gemini model ko configure karega"""
     api_key = get_api_key()
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-1.5-flash")
-
-# ---------------- Database Setup ----------------
-def init_db():
-    conn = sqlite3.connect("users.db")
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
 
 # ---------------- YouTube Links ----------------
 YOUTUBE_LINKS = {
@@ -69,7 +56,6 @@ YOUTUBE_LINKS = {
 
 # ---------------- Routes ----------------
 
-# Home (Chatbot)
 @app.route("/")
 def index():
     if "user" in session:
@@ -92,19 +78,19 @@ def signup():
 
         hashed_password = generate_password_hash(password)
 
-        conn = sqlite3.connect("users.db")
-        c = conn.cursor()
-
-        try:
-            c.execute("INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-                      (name, email, hashed_password))
-            conn.commit()
-            flash("Signup successful! Please log in.", "success")
-            return redirect(url_for("login"))
-        except sqlite3.IntegrityError:
+        # MongoDB insert
+        if users_collection.find_one({"email": email}):
             flash("Email already exists. Try a different one.", "danger")
-        finally:
-            conn.close()
+            return redirect(url_for("signup"))
+
+        users_collection.insert_one({
+            "name": name,
+            "email": email,
+            "password": hashed_password
+        })
+
+        flash("Signup successful! Please log in.", "success")
+        return redirect(url_for("login"))
 
     return render_template("signup.html")
 
@@ -115,14 +101,10 @@ def login():
         email = request.form["email"]
         password = request.form["password"]
 
-        conn = sqlite3.connect("users.db")
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email=?", (email,))
-        user = c.fetchone()
-        conn.close()
+        user = users_collection.find_one({"email": email})
 
-        if user and check_password_hash(user[3], password):
-            session["user"] =  user[1]
+        if user and check_password_hash(user["password"], password):
+            session["user"] = user["name"]
             flash("Login successful!", "success")
             return redirect(url_for("index"))
         else:
@@ -138,7 +120,6 @@ def logout():
     return redirect(url_for("login"))
 
 # Chatbot API
-# Chatbot API
 @app.route("/chat", methods=["POST"])
 def chat():
     if "user" not in session:
@@ -151,56 +132,36 @@ def chat():
     try:
         msg = user_message.lower()
 
-        # 🚫 User ne bola no music
         if any(phrase in msg for phrase in ["don't give music", "no music", "without music", "just talk"]):
             prompt = f"""
             You are PeaceMate, a friendly Stress Relief and Motivation Assistant.  
-
-            - The user does NOT want music or video links.  
-            - Reply in **short chat-style lines** with line breaks.  
-            - Example:  
-              Take a deep breath 🌸  
-              Inhale slowly (4 sec)  
-              Hold (4 sec)  
-              Exhale (4 sec)  
-            - Always reply in the same language.  
-
             User: {user_message}
             PeaceMate:
             """
             model = get_model()
             response = model.generate_content(prompt)
-            bot_reply = getattr(response, "text", "").strip().replace("\n", "\n")
+            bot_reply = getattr(response, "text", "").strip()
             if not bot_reply:
                 bot_reply = "💜 I hear you.\nLet’s just talk.\nTell me what’s on your mind."
             return jsonify({"reply": bot_reply})
 
-        # 🎯 Keyword-based replies
         if any(word in msg for word in ["stress", "tense", "pressure"]):
-            return jsonify({"reply": "😌 I understand, stress can be heavy.\nTry this:\n1. Close your eyes\n2. Breathe deeply\n3. Count to 4 on inhale & exhale"})
+            return jsonify({"reply": "😌 Stress relief:\n1. Close your eyes\n2. Breathe deeply\n3. Count to 4 while inhaling & exhaling"})
         elif "study" in msg:
             return jsonify({"reply": "📚 Study tip:\n- 25 min focus\n- 5 min break\nRepeat ×4 = Great results 💡"})
         elif any(word in msg for word in ["motivation", "inspire", "boost", "video"]):
-            return jsonify({"reply": f"🔥 Stay strong champ!\nWatch this: {random.choice(YOUTUBE_LINKS['motivation'])}"})
+            return jsonify({"reply": f"🔥 Stay strong!\nWatch this: {random.choice(YOUTUBE_LINKS['motivation'])}"})
         elif any(word in msg for word in ["music", "song"]):
-            return jsonify({"reply": f"🎶 Here's something peaceful for you:\n{random.choice(YOUTUBE_LINKS['relax'])}"})
+            return jsonify({"reply": f"🎶 Here's something peaceful:\n{random.choice(YOUTUBE_LINKS['relax'])}"})
 
-        # 🌸 Default Gemini reply
         prompt = f"""
         You are PeaceMate, a friendly Stress Relief and Motivation Assistant.  
-
-        Rules:
-        - Reply in short, simple chat-style lines.  
-        - Use **line breaks for steps and lists**.  
-        - Keep tone warm and empathetic.  
-        - Reply in the same language as the user.  
-
         User: {user_message}
         PeaceMate:
         """
         model = get_model()
         response = model.generate_content(prompt)
-        bot_reply = getattr(response, "text", "").strip().replace("\n", "\n")
+        bot_reply = getattr(response, "text", "").strip()
 
         if not bot_reply:
             bot_reply = "🌸 I hear you.\nTake a deep breath.\nInhale... Hold... Exhale..."
@@ -213,27 +174,18 @@ def chat():
 # ---------------- Admin Route (Check Users) ----------------
 @app.route("/admin/users")
 def admin_users():
-    # Sirf tum login karke dekh sako (ek simple check)
-    admin_secret = os.getenv("ADMIN_SECRET", "admin123")  # .env me rakho
+    admin_secret = os.getenv("ADMIN_SECRET", "admin123")
     if request.args.get("key") != admin_secret:
         return "❌ Unauthorized access"
 
-    conn = sqlite3.connect("users.db")
-    c = conn.cursor()
-    c.execute("SELECT id, name, email FROM users")
-    users = c.fetchall()
-    conn.close()
-
+    users = list(users_collection.find({}, {"name": 1, "email": 1}))
     html = "<h2>Total Users: {}</h2>".format(len(users))
     html += "<ul>"
     for u in users:
-        html += "<li>{} - {} ({})</li>".format(u[0], u[1], u[2])
+        html += f"<li>{u.get('name')} ({u.get('email')})</li>"
     html += "</ul>"
     return html
-
-
 
 # ---------------- Run ----------------
 if __name__ == "__main__":
     app.run(debug=True)
-
