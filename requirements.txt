@@ -3,6 +3,8 @@ python-dotenv
 google-generativeai
 werkzeug
 gunicorn
+pymongo[srv]
+dnspython
 
 
 
