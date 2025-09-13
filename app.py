@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-import sqlite3
+from pymongo import MongoClient
 import os
 import random
 from dotenv import load_dotenv
@@ -31,22 +31,12 @@ def get_model():
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-1.5-flash")
 
-# ---------------- Database Setup ----------------
-def init_db():
-    conn = sqlite3.connect("users.db")
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
+# ---------------- MongoDB Setup ----------------
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
+db = client["peacemate_db"]   # apna DB naam
+users_collection = db["users"]
 
-init_db()
 
 # ---------------- YouTube Links ----------------
 YOUTUBE_LINKS = {
@@ -92,19 +82,19 @@ def signup():
 
         hashed_password = generate_password_hash(password)
 
-        conn = sqlite3.connect("users.db")
-        c = conn.cursor()
-
         try:
-            c.execute("INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-                      (name, email, hashed_password))
-            conn.commit()
-            flash("Signup successful! Please log in.", "success")
-            return redirect(url_for("login"))
-        except sqlite3.IntegrityError:
-            flash("Email already exists. Try a different one.", "danger")
-        finally:
-            conn.close()
+            if users_collection.find_one({"email": email}):
+                flash("Email already exists. Try a different one.", "danger")
+            else:
+                users_collection.insert_one({
+                    "name": name,
+                    "email": email,
+                    "password": hashed_password
+                })
+                flash("Signup successful! Please log in.", "success")
+                return redirect(url_for("login"))
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
 
     return render_template("signup.html")
 
@@ -115,14 +105,10 @@ def login():
         email = request.form["email"]
         password = request.form["password"]
 
-        conn = sqlite3.connect("users.db")
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email=?", (email,))
-        user = c.fetchone()
-        conn.close()
+        user = users_collection.find_one({"email": email})
 
-        if user and check_password_hash(user[3], password):
-            session["user"] =  user[1]
+        if user and check_password_hash(user["password"], password):
+            session["user"] = user["name"]
             flash("Login successful!", "success")
             return redirect(url_for("index"))
         else:
@@ -137,7 +123,6 @@ def logout():
     flash("Logged out successfully.", "info")
     return redirect(url_for("login"))
 
-# Chatbot API
 # Chatbot API
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -170,7 +155,7 @@ def chat():
             """
             model = get_model()
             response = model.generate_content(prompt)
-            bot_reply = getattr(response, "text", "").strip().replace("\n", "\n")
+            bot_reply = getattr(response, "text", "").strip()
             if not bot_reply:
                 bot_reply = "💜 I hear you.\nLet’s just talk.\nTell me what’s on your mind."
             return jsonify({"reply": bot_reply})
@@ -200,7 +185,7 @@ def chat():
         """
         model = get_model()
         response = model.generate_content(prompt)
-        bot_reply = getattr(response, "text", "").strip().replace("\n", "\n")
+        bot_reply = getattr(response, "text", "").strip()
 
         if not bot_reply:
             bot_reply = "🌸 I hear you.\nTake a deep breath.\nInhale... Hold... Exhale..."
@@ -213,24 +198,19 @@ def chat():
 # ---------------- Admin Route (Check Users) ----------------
 @app.route("/admin/users")
 def admin_users():
-    # Sirf tum login karke dekh sako (ek simple check)
-    admin_secret = os.getenv("ADMIN_SECRET", "admin123")  # .env me rakho
+    admin_secret = os.getenv("ADMIN_SECRET", "admin123")
     if request.args.get("key") != admin_secret:
         return "❌ Unauthorized access"
 
-    conn = sqlite3.connect("users.db")
-    c = conn.cursor()
-    c.execute("SELECT id, name, email FROM users")
-    users = c.fetchall()
-    conn.close()
+    all_users = users_collection.find()
+    users_list = list(all_users)
 
-    html = "<h2>Total Users: {}</h2>".format(len(users))
+    html = "<h2>Total Users: {}</h2>".format(len(users_list))
     html += "<ul>"
-    for u in users:
-        html += "<li>{} - {} ({})</li>".format(u[0], u[1], u[2])
+    for u in users_list:
+        html += "<li>{} ({})</li>".format(u["name"], u["email"])
     html += "</ul>"
     return html
-
 
 
 # ---------------- Run ----------------
