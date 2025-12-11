@@ -29,7 +29,7 @@ def get_model():
     """Gemini model ko configure karega"""
     api_key = get_api_key()
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-1.5-flash")
+    return genai.GenerativeModel("gemini-1.5-flash-latest")
 
 # ---------------- MongoDB Setup ----------------
 MONGO_URI = os.getenv("MONGO_URI")
@@ -216,3 +216,4 @@ def admin_users():
 # ---------------- Run ----------------
 if __name__ == "__main__":
     app.run(debug=True)
+
