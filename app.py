@@ -27,7 +27,7 @@ def get_api_key():
 def get_model():
     api_key = get_api_key()
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-1.5-flash-latest")
+    return genai.GenerativeModel("gemini-2.5-flash")
 
 # ---------------- MongoDB Setup ----------------
 MONGO_URI = os.getenv("MONGO_URI")
@@ -214,6 +214,7 @@ def admin_users():
 # ---------------- Run ----------------
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
