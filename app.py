@@ -17,7 +17,6 @@ API_KEYS = os.getenv("GOOGLE_API_KEYS", "").split(",")
 current_index = 0
 
 def get_api_key():
-    """Round-robin se API key return karega"""
     global current_index
     if not API_KEYS or API_KEYS == [""]:
         raise ValueError("❌ No API keys found! Please add GOOGLE_API_KEYS in .env")
@@ -26,7 +25,6 @@ def get_api_key():
     return key
 
 def get_model():
-    """Gemini model ko configure karega"""
     api_key = get_api_key()
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-1.5-flash-latest")
@@ -216,4 +214,5 @@ def admin_users():
 # ---------------- Run ----------------
 if __name__ == "__main__":
     app.run(debug=True)
+
 
