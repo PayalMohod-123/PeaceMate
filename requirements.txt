@@ -5,3 +5,4 @@ werkzeug
 gunicorn
 pymongo[srv]
 dnspython
+langdetect
