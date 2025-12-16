@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signup | PeaceMate</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+/* ---------- BODY ---------- */
+body{
+  margin:0;
+  font-family: Arial, sans-serif;
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background: linear-gradient(135deg,#fde2f3,#e0c3fc);
+}
+
+/* ---------- SIGNUP CARD ---------- */
+.container{
+  width:380px;
+  padding:40px;
+  background: rgba(255,255,255,0.92);
+  border-radius:22px;
+  text-align:center;
+  box-shadow:0 15px 30px rgba(0,0,0,0.2);
+  transition: all 0.4s ease;
+}
+
+.container:hover{
+  transform: translateY(-10px) scale(1.03);
+  box-shadow: 0 25px 55px rgba(157,78,221,0.35);
+  border:1px solid #ffafcc;
+}
+
+h2{
+  color:#6a0572;
+  margin-bottom:22px;
+  font-size:24px;
+}
+
+.input-box{
+  text-align:left;
+  margin:14px 0;
+}
+
+label{
+  font-size:14px;
+  color:#6a0572;
+}
+
+input, select{
+  width:100%;
+  padding:12px;
+  margin-top:6px;
+  border-radius:20px;
+  border:1px solid #e6b8d6;
+  font-size:15px;
+  transition:0.3s;
+}
+
+input:focus, select:focus{
+  outline:none;
+  border-color:#c77dff;
+  box-shadow:0 0 8px rgba(199,125,255,0.6);
+}
+
+button{
+  width:100%;
+  padding:13px;
+  margin-top:20px;
+  border:none;
+  border-radius:25px;
+  background: linear-gradient(135deg,#ff8fab,#9d4edd);
+  color:white;
+  font-size:16px;
+  cursor:pointer;
+  transition: all 0.3s ease;
+}
+
+button:hover{
+  transform: scale(1.05);
+  box-shadow:0 10px 22px rgba(157,78,221,0.5);
+}
+
+.alert{
+  background:#ffafcc;
+  color:#6a0572;
+  padding:10px;
+  border-radius:14px;
+  margin-bottom:15px;
+  font-size:14px;
+}
+
+.footer{
+  margin-top:18px;
+  font-size:14px;
+}
+
+.footer a{
+  color:#9d4edd;
+  text-decoration:none;
+  font-weight:bold;
+}
+
+.footer a:hover{
+  text-decoration:underline;
+}
+
+@media(max-width:420px){
+  .container{
+    width:90%;
+    padding:30px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>🌸 Join PeaceMate</h2>
+
+  {% with messages = get_flashed_messages() %}
+    {% for msg in messages %}
+      <div class="alert">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="POST">
+
+    <div class="input-box">
+      <label>👤 Name</label>
+      <input type="text" name="name" placeholder="Your name" required>
+    </div>
+
+    <div class="input-box">
+      <label>📧 Email</label>
+      <input
+        type="email"
+        name="email"
+        placeholder="example@gmail.com"
+        required
+        pattern="[a-z0-9._%+-]+@(gmail|yahoo|outlook)\.com"
+        title="Only gmail, yahoo or outlook allowed"
+      >
+    </div>
+
+    <!-- ✅ FIXED AGE GROUP VALUES -->
+    <div class="input-box">
+      <label>🎓 Age Group</label>
+      <select name="age_group" required>
+        <option value="">Select age group</option>
+        <option value="13-17">School Student (13–17)</option>
+        <option value="18-22">College Student (18–22)</option>
+        <option value="23-30">Young Adult (23–30)</option>
+        <option value="30+">Adult (30+)</option>
+      </select>
+    </div>
+
+    <div class="input-box">
+      <label>🔒 Password</label>
+      <input type="password" name="password" placeholder="Create password" required>
+    </div>
+
+    <div class="input-box">
+      <label>🔁 Confirm Password</label>
+      <input type="password" name="confirm_password" placeholder="Confirm password" required>
+    </div>
+
+    <button type="submit">Create Account ✨</button>
+  </form>
+
+  <div class="footer">
+    Already a member? <a href="/login">Login</a>
+  </div>
+</div>
+
+</body>
+</html>

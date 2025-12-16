@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PeaceMate</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #fde2f3, #e0c3fc);
+  margin: 0;
+  color: #4a235a;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header {
+  background: linear-gradient(135deg, #c77dff, #ff8fab);
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h2 { font-size: 1.2rem; color: white; }
+header a {
+  color: white;
+  text-decoration: none;
+  background: #ff6f91;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.header-separator {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #6a0572;
+  background: #fce1f0;
+  padding: 8px 0;
+}
+
+.chat-container {
+  flex: 1;
+  width: 95%;
+  max-width: 600px;
+  margin: 15px auto;
+  background: rgba(255,255,255,0.75);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+}
+
+#chat-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+}
+
+.message { display: flex; margin: 8px 0; }
+.user { justify-content: flex-end; }
+.bot { justify-content: flex-start; }
+
+.bubble {
+  padding: 12px 16px;
+  border-radius: 20px;
+  max-width: 75%;
+  white-space: pre-line;
+}
+
+.user .bubble {
+  background: linear-gradient(135deg, #c77dff, #9d4edd);
+  color: white;
+}
+
+.bot .bubble {
+  background: linear-gradient(135deg, #ffafcc, #ff8fab);
+  color: #4a235a;
+}
+
+.input-container {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  background: #f6d9ee;
+}
+
+#user-input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 20px;
+  border: none;
+  outline: none;
+}
+
+#send-btn, #mic-btn {
+  border: none;
+  border-radius: 50%;
+  padding: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: white;
+}
+
+#send-btn {
+  background: linear-gradient(135deg, #9d4edd, #c77dff);
+}
+
+#mic-btn {
+  background: linear-gradient(135deg, #ff8fab, #ffafcc);
+}
+
+#mic-btn.recording {
+  box-shadow: 0 0 8px #ff4d6d;
+  transform: scale(1.1);
+}
+
+@media screen and (max-width: 480px){
+  header h2 { font-size: 1rem; }
+  #user-input { padding: 8px; font-size: 0.9rem; }
+  #send-btn, #mic-btn { padding: 8px; font-size: 0.9rem; }
+  .bubble { padding: 10px 14px; font-size: 0.9rem; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>Welcome, {{ username }} 👋</h2>
+  <a href="{{ url_for('logout') }}">Logout</a>
+</header>
+
+<div class="header-separator"> 🌸 Spread Peace 🌿 </div>
+
+<div class="chat-container">
+  <div id="chat-box"></div>
+
+  <div class="input-container">
+    <input type="text" id="user-input" placeholder="Type a message...">
+    <button id="mic-btn">🎤</button>
+    <button id="send-btn">➤</button>
+  </div>
+</div>
+<script>
+const chatBox = document.getElementById("chat-box");
+const input = document.getElementById("user-input");
+const sendBtn = document.getElementById("send-btn");
+const micBtn = document.getElementById("mic-btn");
+
+let isBotSpeaking = false;
+let recognition = null;
+let recognizing = false;
+
+// Add message to chat
+function addMessage(text, sender){
+    const div = document.createElement("div");
+    div.className = "message " + sender;
+    div.innerHTML = `<div class="bubble">${text}</div>`;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Send message + voice output
+async function sendMessage(msg, isVoice){
+    if(!msg.trim()) return;
+
+    addMessage(msg, "user");
+    input.value = "";
+
+    const res = await fetch("/chat", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({message: msg, isVoice: isVoice})
+    });
+
+    const data = await res.json();
+    addMessage(data.reply, "bot");
+
+    if(isVoice && !recognizing){
+        let lang = "en-IN";
+        if(data.lang === "hi") lang = "hi-IN";
+        else if(data.lang === "mr") lang = "mr-IN";
+        else if(data.lang === "pa") lang = "pa-IN";
+        else if(data.lang === "rj") lang = "hi-IN";
+
+        speakText(data.reply, lang);
+    }
+}
+
+// Speak text (remove emojis)
+function speakText(text, lang){
+    // Remove emojis
+    let cleanText = text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
+    // Remove special symbols (like *, #, @, etc.)
+    cleanText = cleanText.replace(/[^\w\s,.?!]/g, '');
+    
+    const utter = new SpeechSynthesisUtterance(cleanText);
+    utter.lang = lang;
+    utter.rate = 0.95;
+    utter.pitch = 1;
+
+    isBotSpeaking = true;
+    utter.onend = () => { isBotSpeaking = false; };
+
+    window.speechSynthesis.speak(utter);
+}
+
+
+// TEXT input
+sendBtn.addEventListener("click", ()=>sendMessage(input.value, false));
+input.addEventListener("keydown", (e) => { if(e.key==="Enter") sendMessage(input.value, false); });
+
+// 🎤 VOICE input
+micBtn.addEventListener("click", ()=>{
+    if(isBotSpeaking){
+        window.speechSynthesis.cancel();
+        isBotSpeaking = false;
+    }
+
+    if(!recognition){
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if(!SpeechRecognition){
+            alert("Voice not supported in this browser");
+            return;
+        }
+
+        recognition = new SpeechRecognition();
+        recognition.continuous = false; // stop after one phrase
+        recognition.interimResults = false;
+        recognition.lang = "en-IN"; // default, can be overridden
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            recognizing = true;
+            micBtn.classList.add("recording");
+        };
+
+        recognition.onresult = (event) => {
+            const spokenText = event.results[0][0].transcript;
+            sendMessage(spokenText, true);
+        };
+
+        recognition.onerror = (event) => {
+            recognizing = false;
+            micBtn.classList.remove("recording");
+        };
+
+        recognition.onend = () => {
+            recognizing = false;
+            micBtn.classList.remove("recording");
+        };
+    }
+
+    if(!recognizing){
+        recognition.start();
+    } else {
+        recognition.stop();
+    }
+});
+</script>
+
+</body>
+</html>
