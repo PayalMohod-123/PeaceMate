@@ -4,9 +4,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import google.generativeai as genai
 import os
-import pyttsx3
 import re
-import threading
 from langdetect import detect
 
 # ---------- ENV ----------
@@ -28,36 +26,6 @@ def get_model():
     genai.configure(api_key=API_KEYS[key_index].strip())
     key_index = (key_index + 1) % len(API_KEYS)
     return genai.GenerativeModel("gemini-2.5-flash")
-
-# ---------- OFFLINE TTS ----------
-tts_engine = pyttsx3.init()
-tts_engine.setProperty('rate', 150)
-tts_engine.setProperty('volume', 1.0)
-voices = tts_engine.getProperty('voices')
-tts_engine.setProperty('voice', voices[0].id)
-
-def speak_text_async(text, lang='en'):
-    """Speak text in a thread, emojis removed"""
-    def run():
-        # Remove emojis
-        clean_text = re.sub(r'([\U00010000-\U0010FFFF]|[\u2600-\u27BF])', '', text)
-        # Pick voice based on language if available
-        if lang.startswith("hi"):
-            for v in voices:
-                if "Hindi" in v.name:
-                    tts_engine.setProperty('voice', v.id)
-                    break
-        elif lang.startswith("mr"):
-            for v in voices:
-                if "Marathi" in v.name:
-                    tts_engine.setProperty('voice', v.id)
-                    break
-        else:
-            tts_engine.setProperty('voice', voices[0].id)
-
-        tts_engine.say(clean_text)
-        tts_engine.runAndWait()
-    threading.Thread(target=run).start()
 
 # ---------- HOME ----------
 @app.route("/")
@@ -143,7 +111,6 @@ def chat():
 
     data = request.get_json()
     user_msg = data.get("message", "").strip()
-    is_voice = data.get("isVoice", False)
     age = session.get("age_group", "18-22")
 
     if not user_msg:
@@ -198,11 +165,8 @@ PeaceMate reply:
     except:
         reply_text = "I’m here for you 🌸 Please try again."
 
-    if is_voice:
-        speak_text_async(reply_text, lang=lang_code)
-
     return jsonify({"reply": reply_text, "lang": lang_code})
 
 # ---------- RUN ----------
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
