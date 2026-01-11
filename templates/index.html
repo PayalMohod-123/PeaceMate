@@ -195,9 +195,16 @@ async function sendMessage(msg, isVoice){
 function speakText(text, lang){
     // Remove emojis
     let cleanText = text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
-    // Remove special symbols (like *, #, @, etc.)
-    cleanText = cleanText.replace(/[^\w\s,.?!]/g, '');
-    
+
+    // Convert punctuation to pauses (so it won't read "comma", "dot")
+    cleanText = cleanText
+        .replace(/,/g, ' ')     // comma → short pause
+        .replace(/\./g, ' ')    // dot → pause
+        .replace(/!/g, '')      // remove exclamation
+        .replace(/\?/g, '')     // remove question mark
+        .replace(/:/g, ' ')     // colon → pause
+        .replace(/;/g, ' ');    // semicolon → pause
+
     const utter = new SpeechSynthesisUtterance(cleanText);
     utter.lang = lang;
     utter.rate = 0.95;
@@ -208,7 +215,6 @@ function speakText(text, lang){
 
     window.speechSynthesis.speak(utter);
 }
-
 
 // TEXT input
 sendBtn.addEventListener("click", ()=>sendMessage(input.value, false));
@@ -265,3 +271,4 @@ micBtn.addEventListener("click", ()=>{
 
 </body>
 </html>
+
